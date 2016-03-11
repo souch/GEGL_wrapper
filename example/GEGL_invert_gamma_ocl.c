@@ -3,34 +3,50 @@
    export PKG_CONFIG_PATH=/opt/ocl/babl/install/lib/pkgconfig:/opt/ocl/GEGL-OpenCL/install/lib/pkgconfig:/opt/ocl/GEGL_wrapper/install/lib/pkgconfig
    LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/ocl/GEGL-OpenCL/install/lib:/opt/ocl/babl/install/lib:/opt/ocl/babl/install/lib/babl-0.1
    PATH=/opt/ocl/GEGL-OpenCL/bin:$PATH
-   g++ -O3 GEGL_invert_gamma_ocl.c `pkg-config --libs --cflags gegl-wrapper`  `pkg-config --libs --cflags gegl-0.3` -lOpenCL -o GEGL_invert_gamma_ocl && ./GEGL_invert_gamma_ocl
+   g++ -O3 GEGL_invert_gamma_ocl.c `pkg-config --libs --cflags gegl-wrapper`  `pkg-config --libs --cflags gegl-0.3` -lOpenCL -o GEGL_invert_gamma_ocl && ./GEGL_invert_gamma_ocl car-stack.png car-stack_inverted.png
 
 
-no opencl:
-   device: AMD Phenom(tm) II X4 B93 Processor
-   Execution time is: 2.422 ms
+   no opencl:
+device: AMD Phenom(tm) II X4 B93 Processor
+Execution time is: 2.422 ms
 
-
-number of platforms: 2
-number of devices: 1
+. v1
 choose device: AMD Phenom(tm) II X4 B93 Processor
 OpenCl write execution time is: 2.353 ms 
 OpenCl read execution time is: 5.210 ms 
 OpenCl kernel execution time is: 2.789 ms 
 OpenCl total execution time is: 10.353 ms 
-Overall execution time is: 1214.332 ms 
+Main time: 1214.332 ms 
 
-
-number of platforms: 2
-number of devices: 0
-  skip this device (wrong type)
-number of devices: 1
 choose device: GeForce GTX 650 Ti
 OpenCl write execution time is: 2.059 ms 
 OpenCl read execution time is: 1.344 ms 
 OpenCl kernel execution time is: 0.080 ms 
 OpenCl total execution time is: 3.483 ms 
-Overall execution time is: 1187.273 ms 
+Main time: 1187.273 ms 
+
+- without ocl total execution is better?
+
+
+. v2 host optim (data transfer)
+choose device: AMD Phenom(tm) II X4 B93 Processor
+OpenCl write execution time is: 1.506 ms // if do clEnqueueWriteBuffer() the time is not 0 ? it should as device is CPU
+OpenCl read execution time is: 1.461 ms // if do clEnqueueWriteBuffer() the time is not 0 ? it should as device is CPU
+OpenCl kernel execution time is: 2.438 ms 
+OpenCl total execution time is: 5.405 ms 
+Main time: 2034.640 ms 
+
+choose device: AMD Phenom(tm) II X4 B93 Processor
+OpenCl kernel execution time is: 2.522 ms 
+OpenCl total execution time is: 2.522 ms 
+Main time: 2013.061 ms 
+
+choose device: GeForce GTX 650 Ti
+OpenCl write execution time is: 0.506 ms 
+OpenCl read execution time is: 0.551 ms 
+OpenCl kernel execution time is: 0.081 ms 
+OpenCl total execution time is: 1.138 ms 
+Main time: 1188.853 ms 
 
 */   
 
@@ -45,8 +61,8 @@ Overall execution time is: 1187.273 ms
 
 #define MAX_SOURCE_SIZE (0x100000)
 
-//#define DEVICE_TYPE CL_DEVICE_TYPE_CPU
-#define DEVICE_TYPE CL_DEVICE_TYPE_GPU
+#define DEVICE_TYPE CL_DEVICE_TYPE_CPU
+//#define DEVICE_TYPE CL_DEVICE_TYPE_GPU
 
 int main(int argc, char* argv[]) {
     /*
@@ -83,13 +99,13 @@ int main(int argc, char* argv[]) {
 
     clock_t start, end;
     double cpu_time_used;
+    start = clock();
     struct GEGLclass *c = newGEGLclass(argc, argv);
     if (c == NULL)
         return 0;
 
     set_colorformat(c, "R'G'B'A float");
     float *in, *out;
-    start = clock();
     get_in_out(c, &in, &out);
     long pixels = get_pixelcount(c);
     // keep the .c beginning
@@ -166,30 +182,51 @@ int main(int argc, char* argv[]) {
     cl_kernel kernel = NULL;
     kernel = clCreateKernel(program, "cl_invert_gamma", &status);
 
+    // profiling
+    cl_event write_in;
+    cl_event kernel_ev;
+    cl_event read_out;
 
     cl_mem bufferIn, bufferOut;
 
-    bufferIn = clCreateBuffer(context, CL_MEM_READ_ONLY, 
-                              pixels*4*sizeof(float), NULL, &status);
+    bufferIn = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, 
+                              pixels*4*sizeof(float), in, &status);
+    //bufferIn = clCreateBuffer(context, CL_MEM_READ_ONLY, 
+    //                          pixels*4*sizeof(float), NULL, &status);
     if (status != CL_SUCCESS) {
         printf("clCreateBuffer() Error %d: Failed to create bufferIn!\n", status);
         return 0;
     }
 
+    in = (float*)clEnqueueMapBuffer(cmdQueue, bufferIn, CL_TRUE,
+                                    CL_MAP_READ, 0, pixels*4*sizeof(float), 
+                                    0, NULL, NULL, &status);
+    if (status != CL_SUCCESS) {
+        printf("clEnqueueMapBuffer() Error %d: Failed to create bufferIn!\n", status);
+        return 0;
+    }
 
-    bufferOut = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
-                               pixels*4*sizeof(float), NULL, &status);
+
+
+    // can replace CL_MEM_USE_HOST_PTR with CL_MEM_ALLOC_HOST_PTR
+    bufferOut = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR, 
+                               pixels*4*sizeof(float), out, &status);
+    //bufferOut = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
+    //                           pixels*4*sizeof(float), NULL, &status);
     if (status != CL_SUCCESS) {
         printf("clCreateBuffer() Error %d: Failed to create bufferOut!\n", status);
         return 0;
     }
 
 
-    // profiling
-    cl_event write_in;
-    cl_event kernel_ev;
-    cl_event read_out;
-
+    out = (float*)clEnqueueMapBuffer(cmdQueue, bufferOut, CL_TRUE,
+                                    CL_MAP_WRITE, 0, pixels*4*sizeof(float), 
+                                    0, NULL, NULL, &status);
+    if (status != CL_SUCCESS) {
+        printf("clEnqueueMapBuffer() Error %d: Failed to create bufferOut!\n", status);
+        return 0;
+    }
+#if DEVICE_TYPE == CL_DEVICE_TYPE_GPU
     status = clEnqueueWriteBuffer(cmdQueue, bufferIn, CL_FALSE, 0,
                                   pixels*4*sizeof(float), in, 0, NULL, &write_in);
     if (status != CL_SUCCESS)
@@ -197,6 +234,7 @@ int main(int argc, char* argv[]) {
         printf("clEnqueueWriteBuffer() Error %d: Failed to write bufferIn!\n", status);
         return 0;
     }
+#endif
 
     status = clSetKernelArg(kernel, 0, sizeof(cl_mem), &bufferIn);
     status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &bufferOut);
@@ -219,6 +257,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+#if DEVICE_TYPE == CL_DEVICE_TYPE_GPU
     // get results    
     status = clEnqueueReadBuffer(cmdQueue, bufferOut, CL_TRUE, 0,
                                  pixels*4*sizeof(float), out, 0, NULL, &read_out);
@@ -226,7 +265,10 @@ int main(int argc, char* argv[]) {
         printf("clEnqueueReadBuffer() Error %d: Failed to read out buffer!\n", status);
         return 0;
     }
+#endif
 
+    clEnqueueUnmapMemObject(cmdQueue, bufferIn, (void *)in, 0, NULL, NULL);
+    clEnqueueUnmapMemObject(cmdQueue, bufferIn, (void *)out, 0, NULL, NULL);
 
     // sync
     clFinish(cmdQueue);
@@ -240,13 +282,18 @@ int main(int argc, char* argv[]) {
     clGetEventProfilingInfo(read_out, CL_PROFILING_COMMAND_END, sizeof(rtime_end), &rtime_end, NULL);
     clGetEventProfilingInfo(write_in, CL_PROFILING_COMMAND_START, sizeof(wtime_start1), &wtime_start1, NULL);
     clGetEventProfilingInfo(write_in, CL_PROFILING_COMMAND_END, sizeof(wtime_end1), &wtime_end1, NULL);
-
+    
     double total_time;
+#if DEVICE_TYPE == CL_DEVICE_TYPE_GPU
     total_time = (ktime_end-ktime_start) + (rtime_end-rtime_start) + (wtime_end1-wtime_start1);
     printf("OpenCl write execution time is: %0.3f ms \n", (wtime_end1 - wtime_start1)/1000000.0);
     printf("OpenCl read execution time is: %0.3f ms \n", (rtime_end-rtime_start)/1000000.0);
+#else
+    total_time = (ktime_end-ktime_start);
+#endif
     printf("OpenCl kernel execution time is: %0.3f ms \n", (ktime_end-ktime_start)/1000000.0);
     printf("OpenCl total execution time is: %0.3f ms \n", total_time/1000000.0);
+
 
     clReleaseKernel(kernel);
     clReleaseProgram(program);
@@ -261,9 +308,9 @@ int main(int argc, char* argv[]) {
     // keep the .c end
 
     set_output(c);
-    end = clock();
     deleteGEGLclass(c);
 
+    end = clock();
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("Overall execution time is: %0.3f ms \n", cpu_time_used * 1000);
+    printf("Main time: %0.3f ms \n", cpu_time_used * 1000);
 }
