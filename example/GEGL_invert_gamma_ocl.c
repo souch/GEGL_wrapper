@@ -3,7 +3,34 @@
    export PKG_CONFIG_PATH=/opt/ocl/babl/install/lib/pkgconfig:/opt/ocl/GEGL-OpenCL/install/lib/pkgconfig:/opt/ocl/GEGL_wrapper/install/lib/pkgconfig
    LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/ocl/GEGL-OpenCL/install/lib:/opt/ocl/babl/install/lib:/opt/ocl/babl/install/lib/babl-0.1
    PATH=/opt/ocl/GEGL-OpenCL/bin:$PATH
-   g++ -O3 GEGL_invert_gamma_ocl.c `pkg-config --libs --cflags gegl-wrapper`  `pkg-config --libs --cflags gegl-0.3` -lOpenCL -o GEGL_invert_gamma_ocl
+   g++ -O3 GEGL_invert_gamma_ocl.c `pkg-config --libs --cflags gegl-wrapper`  `pkg-config --libs --cflags gegl-0.3` -lOpenCL -o GEGL_invert_gamma_ocl && ./GEGL_invert_gamma_ocl
+
+
+no opencl:
+   device: AMD Phenom(tm) II X4 B93 Processor
+   Execution time is: 2.422 ms
+
+
+number of platforms: 2
+number of devices: 1
+choose device: AMD Phenom(tm) II X4 B93 Processor
+OpenCl write execution time is: 2.353 ms 
+OpenCl read execution time is: 5.210 ms 
+OpenCl kernel execution time is: 2.789 ms 
+OpenCl total execution time is: 10.353 ms 
+Overall execution time is: 1214.332 ms 
+
+
+number of platforms: 2
+number of devices: 0
+  skip this device (wrong type)
+number of devices: 1
+choose device: GeForce GTX 650 Ti
+OpenCl write execution time is: 2.059 ms 
+OpenCl read execution time is: 1.344 ms 
+OpenCl kernel execution time is: 0.080 ms 
+OpenCl total execution time is: 3.483 ms 
+Overall execution time is: 1187.273 ms 
 
 */   
 
@@ -18,8 +45,8 @@
 
 #define MAX_SOURCE_SIZE (0x100000)
 
-#define DEVICE_TYPE CL_DEVICE_TYPE_CPU
-//#define DEVICE_TYPE CL_DEVICE_TYPE_GPU
+//#define DEVICE_TYPE CL_DEVICE_TYPE_CPU
+#define DEVICE_TYPE CL_DEVICE_TYPE_GPU
 
 int main(int argc, char* argv[]) {
     /*
@@ -62,9 +89,9 @@ int main(int argc, char* argv[]) {
 
     set_colorformat(c, "R'G'B'A float");
     float *in, *out;
+    start = clock();
     get_in_out(c, &in, &out);
     long pixels = get_pixelcount(c);
-    start = clock();
     // keep the .c beginning
 
 
@@ -158,8 +185,13 @@ int main(int argc, char* argv[]) {
     }
 
 
+    // profiling
+    cl_event write_in;
+    cl_event kernel_ev;
+    cl_event read_out;
+
     status = clEnqueueWriteBuffer(cmdQueue, bufferIn, CL_FALSE, 0,
-                                  pixels*4*sizeof(float), in, 0, NULL, NULL);
+                                  pixels*4*sizeof(float), in, 0, NULL, &write_in);
     if (status != CL_SUCCESS)
     {
         printf("clEnqueueWriteBuffer() Error %d: Failed to write bufferIn!\n", status);
@@ -179,10 +211,9 @@ int main(int argc, char* argv[]) {
     globalWorkSize[0] = pixels;
 
 
-    printf("clEnqueueNDRangeKernel\n");
-     // start computing
+    // start computing
     status = clEnqueueNDRangeKernel(cmdQueue, kernel, 1, NULL, globalWorkSize,
-                                    NULL, 0, NULL, NULL);
+                                    NULL, 0, NULL, &kernel_ev);
     if (status != CL_SUCCESS) {
         printf("clEnqueueNDRangeKernel() Error %d: Failed to execute kernel!\n", status);
         return 0;
@@ -190,12 +221,32 @@ int main(int argc, char* argv[]) {
 
     // get results    
     status = clEnqueueReadBuffer(cmdQueue, bufferOut, CL_TRUE, 0,
-                                 pixels*4*sizeof(float), out, 0, NULL, NULL);
+                                 pixels*4*sizeof(float), out, 0, NULL, &read_out);
     if (status != CL_SUCCESS) {
         printf("clEnqueueReadBuffer() Error %d: Failed to read out buffer!\n", status);
         return 0;
     }
-    
+
+
+    // sync
+    clFinish(cmdQueue);
+
+    cl_ulong ktime_start, ktime_end;
+    cl_ulong wtime_start1, wtime_end1;
+    cl_ulong rtime_start, rtime_end;
+    clGetEventProfilingInfo(kernel_ev, CL_PROFILING_COMMAND_START, sizeof(ktime_start), &ktime_start, NULL);
+    clGetEventProfilingInfo(kernel_ev, CL_PROFILING_COMMAND_END, sizeof(ktime_end), &ktime_end, NULL);
+    clGetEventProfilingInfo(read_out, CL_PROFILING_COMMAND_START, sizeof(rtime_start), &rtime_start, NULL);
+    clGetEventProfilingInfo(read_out, CL_PROFILING_COMMAND_END, sizeof(rtime_end), &rtime_end, NULL);
+    clGetEventProfilingInfo(write_in, CL_PROFILING_COMMAND_START, sizeof(wtime_start1), &wtime_start1, NULL);
+    clGetEventProfilingInfo(write_in, CL_PROFILING_COMMAND_END, sizeof(wtime_end1), &wtime_end1, NULL);
+
+    double total_time;
+    total_time = (ktime_end-ktime_start) + (rtime_end-rtime_start) + (wtime_end1-wtime_start1);
+    printf("OpenCl write execution time is: %0.3f ms \n", (wtime_end1 - wtime_start1)/1000000.0);
+    printf("OpenCl read execution time is: %0.3f ms \n", (rtime_end-rtime_start)/1000000.0);
+    printf("OpenCl kernel execution time is: %0.3f ms \n", (ktime_end-ktime_start)/1000000.0);
+    printf("OpenCl total execution time is: %0.3f ms \n", total_time/1000000.0);
 
     clReleaseKernel(kernel);
     clReleaseProgram(program);
@@ -208,11 +259,11 @@ int main(int argc, char* argv[]) {
 
 
     // keep the .c end
-    end = clock();
 
     set_output(c);
+    end = clock();
     deleteGEGLclass(c);
 
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("Execution time is: %0.3f ms \n", cpu_time_used * 1000);
+    printf("Overall execution time is: %0.3f ms \n", cpu_time_used * 1000);
 }

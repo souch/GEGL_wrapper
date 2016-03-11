@@ -1,4 +1,13 @@
-//   g++ -O3 GEGL_invertgamma.c `pkg-config --libs --cflags gegl-wrapper` -o GEGL_invertgamma
+/*
+ 
+ g++ -O3 GEGL_invert_gamma.c `pkg-config --libs --cflags gegl-wrapper` -o GEGL_invertgamma && ./GEGL_invertgamma car-stack.png car-stack_inverted.png
+
+ device: AMD Phenom(tm) II X4 B93 Processor
+   Execution time is: 2.422 ms
+
+
+ */
+
 
 
 

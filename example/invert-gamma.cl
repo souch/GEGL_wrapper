@@ -1,4 +1,4 @@
-
+// v1
 __kernel void cl_invert_gamma(__global const float4 *in,
                               __global       float4 *out)
 { 
