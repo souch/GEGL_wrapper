@@ -32,9 +32,9 @@ int main(int argc, char* argv[]) {
        set_colorformat(c, "R'G'B'A float");
        float *in, *out;
        get_in_out(c, &in, &out);
-       long samples = get_pixelcount(c);
+       long pixels = get_pixelcount(c);
        start = clock();
-       while (samples--) {
+       while (pixels--) {
        out[0] = 1.0 - in[0];
        out[1] = 1.0 - in[1];
        out[2] = 1.0 - in[2];
@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
     set_colorformat(c, "R'G'B'A float");
     float *in, *out;
     get_in_out(c, &in, &out);
-    long samples = get_pixelcount(c);
+    long pixels = get_pixelcount(c);
     start = clock();
     // keep the .c beginning
 
@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
     cl_mem bufferIn, bufferOut;
 
     bufferIn = clCreateBuffer(context, CL_MEM_READ_ONLY, 
-                              samples*sizeof(float), NULL, &status);
+                              pixels*4*sizeof(float), NULL, &status);
     if (status != CL_SUCCESS) {
         printf("clCreateBuffer() Error %d: Failed to create bufferIn!\n", status);
         return 0;
@@ -151,7 +151,7 @@ int main(int argc, char* argv[]) {
 
 
     bufferOut = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
-                               samples*sizeof(float), NULL, &status);
+                               pixels*4*sizeof(float), NULL, &status);
     if (status != CL_SUCCESS) {
         printf("clCreateBuffer() Error %d: Failed to create bufferOut!\n", status);
         return 0;
@@ -159,7 +159,7 @@ int main(int argc, char* argv[]) {
 
 
     status = clEnqueueWriteBuffer(cmdQueue, bufferIn, CL_FALSE, 0,
-                                  samples*sizeof(float), in, 0, NULL, NULL);
+                                  pixels*4*sizeof(float), in, 0, NULL, NULL);
     if (status != CL_SUCCESS)
     {
         printf("clEnqueueWriteBuffer() Error %d: Failed to write bufferIn!\n", status);
@@ -176,10 +176,11 @@ int main(int argc, char* argv[]) {
 
 
     size_t globalWorkSize[1];
-    globalWorkSize[0] = samples;
+    globalWorkSize[0] = pixels;
 
 
-    // start computing
+    printf("clEnqueueNDRangeKernel\n");
+     // start computing
     status = clEnqueueNDRangeKernel(cmdQueue, kernel, 1, NULL, globalWorkSize,
                                     NULL, 0, NULL, NULL);
     if (status != CL_SUCCESS) {
@@ -187,13 +188,14 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    // get results
+    // get results    
     status = clEnqueueReadBuffer(cmdQueue, bufferOut, CL_TRUE, 0,
-                                 samples*sizeof(float), out, 0, NULL, NULL);
+                                 pixels*4*sizeof(float), out, 0, NULL, NULL);
     if (status != CL_SUCCESS) {
         printf("clEnqueueReadBuffer() Error %d: Failed to read out buffer!\n", status);
         return 0;
     }
+    
 
     clReleaseKernel(kernel);
     clReleaseProgram(program);
@@ -213,5 +215,4 @@ int main(int argc, char* argv[]) {
 
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
     printf("Execution time is: %0.3f ms \n", cpu_time_used * 1000);
-
 }
