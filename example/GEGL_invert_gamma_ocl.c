@@ -6,50 +6,9 @@
    g++ -O3 GEGL_invert_gamma_ocl.c `pkg-config --libs --cflags gegl-wrapper`  `pkg-config --libs --cflags gegl-0.3` -lOpenCL -o GEGL_invert_gamma_ocl && ./GEGL_invert_gamma_ocl car-stack.png car-stack_inverted.png && /opt/ocl/GEGL-OpenCL/tools/gegl-imgcmp car-stack_inverted.png car-stack_inverted_ori.png
 
 
-   no opencl:
-device: AMD Phenom(tm) II X4 B93 Processor
-Execution time is: 2.422 ms
-
-. v1
-choose device: AMD Phenom(tm) II X4 B93 Processor
-OpenCl write execution time is: 2.353 ms 
-OpenCl read execution time is: 5.210 ms 
-OpenCl kernel execution time is: 2.789 ms 
-OpenCl total execution time is: 10.353 ms 
-Main time: 1214.332 ms 
-
-choose device: GeForce GTX 650 Ti
-OpenCl write execution time is: 2.059 ms 
-OpenCl read execution time is: 1.344 ms 
-OpenCl kernel execution time is: 0.080 ms 
-OpenCl total execution time is: 3.483 ms 
-Main time: 1187.273 ms 
-
-- without ocl total execution is better?
-
-
-. v2 host optim (data transfer)
-choose device: AMD Phenom(tm) II X4 B93 Processor
-OpenCl write execution time is: 1.506 ms // if do clEnqueueWriteBuffer() the time is not 0 ? it should as device is CPU
-OpenCl read execution time is: 1.461 ms // if do clEnqueueWriteBuffer() the time is not 0 ? it should as device is CPU
-OpenCl kernel execution time is: 2.438 ms 
-OpenCl total execution time is: 5.405 ms 
-Main time: 2034.640 ms 
-
-choose device: AMD Phenom(tm) II X4 B93 Processor
-OpenCl kernel execution time is: 2.522 ms 
-OpenCl total execution time is: 2.522 ms 
-Main time: 2013.061 ms 
-
-choose device: GeForce GTX 650 Ti
-OpenCl write execution time is: 0.506 ms 
-OpenCl read execution time is: 0.551 ms 
-OpenCl kernel execution time is: 0.081 ms 
-OpenCl total execution time is: 1.138 ms 
-Main time: 1188.853 ms 
+   g++ -O3 GEGL_invert_gamma_ocl.c `pkg-config --libs --cflags gegl-wrapper`  `pkg-config --libs --cflags gegl-0.3` -lOpenCL -o GEGL_invert_gamma_ocl && ./GEGL_invert_gamma_ocl  tofukiwi.jpg tofukiwi_inverted.jpg && /opt/ocl/GEGL-OpenCL/tools/gegl-imgcmp tofukiwi_inverted.jpg tofukiwi_inverted_ori.jpg
 
 */   
-
 
 
 #include "GEGLwrapper.h"
@@ -61,8 +20,8 @@ Main time: 1188.853 ms
 
 #define MAX_SOURCE_SIZE (0x100000)
 
-#define DEVICE_TYPE CL_DEVICE_TYPE_CPU
-//#define DEVICE_TYPE CL_DEVICE_TYPE_GPU
+//#define DEVICE_TYPE CL_DEVICE_TYPE_CPU
+#define DEVICE_TYPE CL_DEVICE_TYPE_GPU
 
 int main(int argc, char* argv[]) {
     /*
@@ -94,7 +53,6 @@ int main(int argc, char* argv[]) {
        cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
        printf("Execution time is: %0.3f ms \n", cpu_time_used * 1000);
        */
-
 
 
     clock_t start, end;
@@ -314,3 +272,69 @@ int main(int argc, char* argv[]) {
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
     printf("Main time: %0.3f ms \n", cpu_time_used * 1000);
 }
+
+
+
+/* results
+   
+car-stack.png: 512x384
+
+   no opencl:
+device: AMD Phenom(tm) II X4 B93 Processor
+Execution time is: 2.422 ms
+
+. v1
+choose device: AMD Phenom(tm) II X4 B93 Processor
+OpenCl write execution time is: 2.353 ms 
+OpenCl read execution time is: 5.210 ms 
+OpenCl kernel execution time is: 2.789 ms 
+OpenCl total execution time is: 10.353 ms 
+Main time: 1214.332 ms 
+
+choose device: GeForce GTX 650 Ti
+OpenCl write execution time is: 2.059 ms 
+OpenCl read execution time is: 1.344 ms 
+OpenCl kernel execution time is: 0.080 ms 
+OpenCl total execution time is: 3.483 ms 
+Main time: 1187.273 ms 
+
+- without ocl total execution is better?
+
+
+. v2 host optim (data transfer)
+choose device: AMD Phenom(tm) II X4 B93 Processor
+OpenCl write execution time is: 1.506 ms // if do clEnqueueWriteBuffer() the time is not 0 ? it should as device is CPU
+OpenCl read execution time is: 1.461 ms // if do clEnqueueWriteBuffer() the time is not 0 ? it should as device is CPU
+OpenCl kernel execution time is: 2.438 ms 
+OpenCl total execution time is: 5.405 ms 
+Main time: 2034.640 ms 
+
+choose device: AMD Phenom(tm) II X4 B93 Processor
+OpenCl kernel execution time is: 2.522 ms 
+OpenCl total execution time is: 2.522 ms 
+Main time: 2013.061 ms 
+
+choose device: GeForce GTX 650 Ti
+OpenCl write execution time is: 0.506 ms 
+OpenCl read execution time is: 0.551 ms 
+OpenCl kernel execution time is: 0.081 ms 
+OpenCl total execution time is: 1.138 ms 
+Main time: 1188.853 ms 
+
+
+. v2 tofukiwi.jpg 4592x3448
+
+choose device: AMD Phenom(tm) II X4 B93 Processor
+OpenCl kernel execution time is: 142.268 ms 
+OpenCl total execution time is: 142.268 ms 
+Main time: 4855.442 ms 
+
+choose device: GeForce GTX 650 Ti
+OpenCl write execution time is: 98.191 ms 
+OpenCl read execution time is: 44.312 ms 
+OpenCl kernel execution time is: 6.052 ms 
+OpenCl total execution time is: 148.556 ms 
+Main time: 4817.581 ms 
+
+
+*/
