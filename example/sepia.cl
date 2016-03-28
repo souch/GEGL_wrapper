@@ -1,10 +1,11 @@
 // v1
 __kernel void cl_sepia(__global const float4 *in,
+                       const float scale,
                        __global       float4 *out)
 { 
   int gid = get_global_id(0);
   
-  float scale = 0.9; //  o->scale
+  //float scale = 0.9; //  o->scale
 
   __local float m[9];
   m[0] = 0.393 + 0.607 * (1.0 - scale);

@@ -20,8 +20,8 @@
 
 #define MAX_SOURCE_SIZE (0x100000)
 
-#define DEVICE_TYPE CL_DEVICE_TYPE_CPU
-//#define DEVICE_TYPE CL_DEVICE_TYPE_GPU
+//#define DEVICE_TYPE CL_DEVICE_TYPE_CPU
+#define DEVICE_TYPE CL_DEVICE_TYPE_GPU
 
 int main(int argc, char* argv[]) {
     clock_t start, end;
@@ -173,10 +173,19 @@ int main(int argc, char* argv[]) {
         printf("clEnqueueclEnqueueWriteBufferWriteBuffer() 0 Error \n");
         return 0;
     }
-    status = clSetKernelArg(kernel, 1, sizeof(cl_mem), &bufferOut);
+
+    float scale = 1;
+    clSetKernelArg(kernel, 1, sizeof(scale), &scale);
     if (status != CL_SUCCESS)
     {
         printf("clEnqueueclEnqueueWriteBufferWriteBuffer() 1 Error \n");
+        return 0;
+    }
+    
+    status = clSetKernelArg(kernel, 2, sizeof(cl_mem), &bufferOut);
+    if (status != CL_SUCCESS)
+    {
+        printf("clEnqueueclEnqueueWriteBufferWriteBuffer() 2 Error \n");
         return 0;
     }
 
@@ -263,16 +272,16 @@ Execution time is: 2.491 ms
 
 . v1
 choose device: AMD Phenom(tm) II X4 B93 Processor
-OpenCl kernel execution time is: 4.292 ms 
-OpenCl total execution time is: 4.292 ms 
-Main time: 2018.390 ms 
+OpenCl kernel execution time is: 4.862 ms 
+OpenCl total execution time is: 4.862 ms 
+Main time: 2019.919 ms
 
 choose device: GeForce GTX 650 Ti
-OpenCl write execution time is: 1.842 ms 
-OpenCl read execution time is: 0.551 ms 
-OpenCl kernel execution time is: 0.080 ms 
-OpenCl total execution time is: 2.474 ms 
-Main time: 2664.531 ms 
+OpenCl write execution time is: 0.573 ms 
+OpenCl read execution time is: 0.549 ms 
+OpenCl kernel execution time is: 0.082 ms 
+OpenCl total execution time is: 1.204 ms 
+Main time: 2532.078 ms 
 
 
 
